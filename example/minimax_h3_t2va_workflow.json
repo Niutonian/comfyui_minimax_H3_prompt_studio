@@ -1,0 +1,110 @@
+{
+  "last_node_id": 5,
+  "last_link_id": 4,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "MiniMaxH3LLMProvider",
+      "pos": [60, 140],
+      "size": [420, 350],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {"name": "provider_config", "type": "MINIMAX_H3_LLM_CONFIG", "links": [1]},
+        {"name": "configuration_summary", "type": "STRING", "links": null}
+      ],
+      "properties": {"Node name for S&R": "MiniMaxH3LLMProvider"},
+      "widgets_values": ["Ollama", "qwen3.6:latest", "", 0.7, 6144, 240, true]
+    },
+    {
+      "id": 2,
+      "type": "MiniMaxH3AllInOne",
+      "pos": [560, 80],
+      "size": [500, 790],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {"name": "provider_config", "type": "MINIMAX_H3_LLM_CONFIG", "link": 1}
+      ],
+      "outputs": [
+        {"name": "story", "type": "STRING", "links": [2]},
+        {"name": "shot_plan", "type": "STRING", "links": [3]},
+        {"name": "h3_prompt", "type": "STRING", "links": [4]},
+        {"name": "raw_response", "type": "STRING", "links": null}
+      ],
+      "properties": {"Node name for S&R": "MiniMaxH3AllInOne"},
+      "widgets_values": [
+        "A night baker opens a tiny street bakery before sunrise and discovers an unexpected first customer.",
+        "T2VA",
+        "cinematic narrative",
+        "cinematic",
+        "engaging",
+        "Live-action, cinematic, warm practical lighting",
+        10,
+        2,
+        "multi-shot sequence",
+        "English",
+        "",
+        "Use precise synchronized sound and end on a decisive final composition.",
+        0,
+        "",
+        ""
+      ]
+    },
+    {
+      "id": 3,
+      "type": "MiniMaxH3TextPreview",
+      "pos": [1160, 60],
+      "size": [620, 280],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [{"name": "text", "type": "STRING", "link": 2}],
+      "outputs": [{"name": "text", "type": "STRING", "links": null}],
+      "title": "Story",
+      "properties": {"Node name for S&R": "MiniMaxH3TextPreview"},
+      "widgets_values": []
+    },
+    {
+      "id": 4,
+      "type": "MiniMaxH3TextPreview",
+      "pos": [1160, 390],
+      "size": [620, 280],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [{"name": "text", "type": "STRING", "link": 3}],
+      "outputs": [{"name": "text", "type": "STRING", "links": null}],
+      "title": "H3 Shot Plan",
+      "properties": {"Node name for S&R": "MiniMaxH3TextPreview"},
+      "widgets_values": []
+    },
+    {
+      "id": 5,
+      "type": "MiniMaxH3TextPreview",
+      "pos": [1160, 720],
+      "size": [620, 420],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [{"name": "text", "type": "STRING", "link": 4}],
+      "outputs": [{"name": "text", "type": "STRING", "links": null}],
+      "title": "Final MiniMax H3 Prompt",
+      "properties": {"Node name for S&R": "MiniMaxH3TextPreview"},
+      "widgets_values": []
+    }
+  ],
+  "links": [
+    [1, 1, 0, 2, 0, "MINIMAX_H3_LLM_CONFIG"],
+    [2, 2, 0, 3, 0, "STRING"],
+    [3, 2, 1, 4, 0, "STRING"],
+    [4, 2, 2, 5, 0, "STRING"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}
