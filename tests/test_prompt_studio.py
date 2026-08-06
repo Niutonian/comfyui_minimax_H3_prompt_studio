@@ -25,6 +25,7 @@ from comfyui_minimax_H3_prompt_studio.nodes import (
     CONFIG_TYPE,
     NODE_CLASS_MAPPINGS,
     MiniMaxH3LLMProvider,
+    MiniMaxH3TextPreview,
     MiniMaxH3VisionAllInOne,
     encode_comfy_image,
 )
@@ -190,6 +191,11 @@ class NodeTests(unittest.TestCase):
     def test_provider_uses_minimax_config_type(self):
         self.assertEqual(MiniMaxH3LLMProvider.RETURN_TYPES[0], CONFIG_TYPE)
         self.assertEqual(CONFIG_TYPE, "MINIMAX_H3_LLM_CONFIG")
+
+    def test_text_preview_returns_ui_payload_and_string_passthrough(self):
+        result = MiniMaxH3TextPreview().preview("A generated scene")
+        self.assertEqual(result["ui"]["text"], ["A generated scene"])
+        self.assertEqual(result["result"], ("A generated scene",))
 
     def test_vision_mode_requirements(self):
         validate = MiniMaxH3VisionAllInOne._image_specs

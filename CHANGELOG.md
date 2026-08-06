@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Fixed the Text Preview node so execution payloads appear in a resizable,
+  read-only multiline viewer while continuing through the STRING output.
+
 ## 0.1.0 - 2026-08-06
 
 - Initial nine-node MiniMax H3 audiovisual prompt suite.
