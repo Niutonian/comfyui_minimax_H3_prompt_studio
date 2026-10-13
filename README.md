@@ -36,6 +36,9 @@ and
   I2VA, FL2VA, L2VA, or full-reference prompts.
 - **H3 Prompt Builder** — deterministically assembles an H3 base prompt without an LLM.
 - **Text Preview** — displays and passes through any generated string.
+- **H3 Prompt Validator (Local)** — checks section order, shot numbering, cut times,
+  keyframe alignment, and dialogue tags without an API call. Reports issues by default;
+  enable strict mode to stop invalid prompts before generation.
 
 All writing outputs use ComfyUI's standard `STRING` type.
 
@@ -73,6 +76,16 @@ you refresh the list. Use a vision-capable writing model for the image-story nod
 The provider exposes `disable_ollama_thinking`, enabled by default, so the final H3
 structure receives the prediction budget instead of being consumed by hidden reasoning.
 Vision requests always disable thinking.
+
+The model picker supports **enter model manually** for identifiers absent from discovery.
+Changing the endpoint refreshes discovery, and stale requests cannot replace newer choices.
+All-in-one nodes reject malformed JSON, missing/non-string fields, and empty final prompts
+instead of forwarding a raw response as an H3 prompt.
+
+To check a generated prompt, connect its `h3_prompt` output to **H3 Prompt Validator
+(Local)**, select the matching task mode and duration, and pass the validator's
+`h3_prompt` output to your generation workflow. This checks structure, not creative
+quality or whether the selected video model supports the requested duration.
 
 Default endpoints:
 
@@ -183,6 +196,7 @@ From the directory containing the package:
 ```powershell
 python -m unittest discover -s comfyui_minimax_H3_prompt_studio/tests -v
 node --check comfyui_minimax_H3_prompt_studio/web/model_picker.js
+node --test comfyui_minimax_H3_prompt_studio/tests/model_picker.test.cjs
 ```
 
 ## Security and attribution

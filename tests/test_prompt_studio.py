@@ -27,6 +27,7 @@ from comfyui_minimax_H3_prompt_studio.nodes import (
     MiniMaxH3LLMProvider,
     MiniMaxH3TextPreview,
     MiniMaxH3VisionAllInOne,
+    MiniMaxH3PromptValidator,
     encode_comfy_image,
 )
 from comfyui_minimax_H3_prompt_studio.prompts import (
@@ -34,6 +35,7 @@ from comfyui_minimax_H3_prompt_studio.prompts import (
     assemble_h3_prompt,
     parse_package,
     parse_vision_package,
+    validate_h3_prompt,
 )
 from comfyui_minimax_H3_prompt_studio.providers import (
     ProviderError,
@@ -117,6 +119,58 @@ class PromptTests(unittest.TestCase):
         self.assertEqual(parse_vision_package(raw), ("A", "D", "R", "S", "P", "H"))
 
 
+class ValidationTests(unittest.TestCase):
+    def test_invalid_packages_never_forward_raw_text(self):
+        for parser in (parse_package, parse_vision_package):
+            with self.subTest(parser=parser.__name__):
+                with self.assertRaisesRegex(ValueError, "invalid package JSON"):
+                    parser('{"h3_prompt": "truncated')
+                with self.assertRaisesRegex(ValueError, "package fields"):
+                    parser('{"story": "S", "h3_prompt": null}')
+
+    def test_empty_final_prompt_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "h3_prompt"):
+            parse_package(json.dumps({"story": "S", "scene_plan": "P", "h3_prompt": " "}))
+
+    def test_valid_base_and_keyframe_prompts(self):
+        timeline = '[Shot 1] A fox speaks: <d> [English] Hello.</d> [Shot 2] At 00:02.000, it runs.'
+        for mode in ("T2VA", "I2VA", "FL2VA", "L2VA"):
+            with self.subTest(mode=mode):
+                prompt = assemble_h3_prompt(mode, timeline, "Wind.", "N/A", 5, 2)
+                self.assertEqual(validate_h3_prompt(prompt, mode, 5), [])
+
+    def test_alignment_shot_labels_are_not_timeline_shots(self):
+        prompt = assemble_h3_prompt("L2VA", "[Shot 1] A fox runs.", "Wind.", "N/A", 5, 1)
+        self.assertEqual(validate_h3_prompt(prompt, "L2VA", 5), [])
+
+    def test_invalid_timing_numbering_sections_and_dialogue(self):
+        examples = [
+            ("[Shot 1] A. [Shot 3] At 00:02.000, B.", "consecutively"),
+            ("[Shot 1] A. [Shot 2] At 00:05.000, B.", "before the video ends"),
+            ("[Shot 1] A. [Shot 2] At 00:03.000, B. [Shot 3] At 00:02.000, C.", "increase"),
+            ("[Shot 1] At 00:00.000, A.", "must not have"),
+            ("[Shot 1] A. [Shot 2] At 00:99.000, B.", "needs an At"),
+            ("[Shot 1] <d>Hello.</d>", "[Language]"),
+            ("[Shot 1] <d>[English] Hello.", "paired"),
+        ]
+        for timeline, expected in examples:
+            with self.subTest(timeline=timeline):
+                prompt = assemble_h3_prompt("T2VA", timeline, "Wind.", "N/A", 5, 2)
+                self.assertIn(expected, "\n".join(validate_h3_prompt(prompt, "T2VA", 5)))
+        prompt = "integrated_multimodal_description: [Shot 1] A.\nnon_diegetic_music: N/A\noverall_soundscape: Wind."
+        self.assertIn("expected order", "\n".join(validate_h3_prompt(prompt, "T2VA", 5)))
+
+    def test_full_reference_and_strict_passthrough(self):
+        prompt = "subject_definitions: Fox\nsummary: Running\nretention_analysis: Preserved\ndetailed_description: [Shot 1] Fox runs.\noverall_soundscape: Wind\nnon_diegetic_music: N/A"
+        validator = MiniMaxH3PromptValidator()
+        self.assertTrue(validator.validate(prompt, "full-reference", 5, True)[2])
+        result = validator.validate("broken", "T2VA", 5, False)
+        self.assertEqual(result[0], "broken")
+        self.assertFalse(result[2])
+        with self.assertRaisesRegex(ValueError, "validation failed"):
+            validator.validate("broken", "T2VA", 5, True)
+
+
 class ProviderTests(unittest.TestCase):
     @patch("urllib.request.urlopen")
     def test_discovers_sorted_ollama_models(self, urlopen):
@@ -185,7 +239,7 @@ class ProviderTests(unittest.TestCase):
 
 class NodeTests(unittest.TestCase):
     def test_all_nodes_are_registered_and_namespaced(self):
-        self.assertEqual(len(NODE_CLASS_MAPPINGS), 9)
+        self.assertEqual(len(NODE_CLASS_MAPPINGS), 10)
         self.assertTrue(all(name.startswith("MiniMaxH3") for name in NODE_CLASS_MAPPINGS))
 
     def test_provider_uses_minimax_config_type(self):

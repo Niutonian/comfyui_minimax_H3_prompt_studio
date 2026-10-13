@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Reject malformed all-in-one packages, invalid field types, and empty final prompts.
+- Added a local structural validator with report, validity, and strict-mode outputs.
+- Added manual model entry, endpoint refresh, and stale discovery request protection.
+- Moved model discovery network calls off the ComfyUI server event loop.
+
 - Fixed the Text Preview node so execution payloads appear in a resizable,
   read-only multiline viewer while continuing through the STRING output.
 

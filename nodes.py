@@ -18,6 +18,7 @@ from .prompts import (
     scene_request,
     story_request,
     vision_all_in_one_request,
+    validate_h3_prompt,
 )
 from .providers import generate_text, generate_vision_text
 
@@ -400,7 +401,32 @@ class MiniMaxH3TextPreview:
         return {"ui": {"text": [text]}, "result": (text,)}
 
 
+class MiniMaxH3PromptValidator:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {
+            "prompt_text": ("STRING", MULTILINE),
+            "task_mode": ([*BASE_TASK_MODES, "full-reference"],),
+            "duration_seconds": ("FLOAT", {"default": 10.0, "min": 0.01, "max": 600.0}),
+            "strict": ("BOOLEAN", {"default": False}),
+        }}
+
+    RETURN_TYPES = ("STRING", "STRING", "BOOLEAN")
+    RETURN_NAMES = ("h3_prompt", "validation_report", "is_valid")
+    FUNCTION = "validate"
+    CATEGORY = f"{CATEGORY}/Utilities"
+    OUTPUT_NODE = True
+
+    def validate(self, prompt_text, task_mode, duration_seconds, strict):
+        issues = validate_h3_prompt(prompt_text, task_mode, duration_seconds)
+        report = "Structural validation passed." if not issues else "\n".join(f"- {issue}" for issue in issues)
+        if strict and issues:
+            raise ValueError("H3 prompt validation failed:\n" + report)
+        return prompt_text, report, not issues
+
+
 NODE_CLASS_MAPPINGS = {
+    "MiniMaxH3PromptValidator": MiniMaxH3PromptValidator,
     "MiniMaxH3LLMProvider": MiniMaxH3LLMProvider,
     "MiniMaxH3StoryGenerator": MiniMaxH3StoryGenerator,
     "MiniMaxH3ScenePlanner": MiniMaxH3ScenePlanner,
@@ -413,6 +439,7 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
+    "MiniMaxH3PromptValidator": "H3 Prompt Validator (Local)",
     "MiniMaxH3LLMProvider": "LLM Provider",
     "MiniMaxH3StoryGenerator": "H3 Story Generator",
     "MiniMaxH3ScenePlanner": "H3 Shot Planner",

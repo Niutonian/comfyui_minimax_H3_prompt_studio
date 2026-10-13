@@ -280,10 +280,7 @@ def _json_object(text: str) -> dict[str, Any] | None:
 
 
 def parse_package(text: str) -> tuple[str, str, str]:
-    data = _json_object(text)
-    if data is None:
-        fallback = text.strip()
-        return fallback, "", fallback
+    data = _require_package(text, ("story", "scene_plan", "h3_prompt"))
     return (
         str(data.get("story", "")).strip(),
         str(data.get("scene_plan", "")).strip(),
@@ -292,10 +289,10 @@ def parse_package(text: str) -> tuple[str, str, str]:
 
 
 def parse_vision_package(text: str) -> tuple[str, str, str, str, str, str]:
-    data = _json_object(text)
-    if data is None:
-        fallback = text.strip()
-        return "", "", "", fallback, "", fallback
+    data = _require_package(text, (
+        "reference_analysis", "subject_definitions", "retention_analysis",
+        "story", "scene_plan", "h3_prompt",
+    ))
     return tuple(
         str(data.get(key, "")).strip()
         for key in (
@@ -307,3 +304,76 @@ def parse_vision_package(text: str) -> tuple[str, str, str, str, str, str]:
             "h3_prompt",
         )
     )
+
+
+def _require_package(text: str, fields: tuple[str, ...]) -> dict[str, str]:
+    data = _json_object(text)
+    if data is None:
+        raise ValueError("Writing model returned invalid package JSON. Increase max_tokens or retry; no prompt was forwarded.")
+    invalid = [key for key in fields if not isinstance(data.get(key), str)]
+    if invalid or not data.get("h3_prompt", "").strip():
+        detail = ", ".join(invalid) or "h3_prompt (empty)"
+        raise ValueError(f"Writing model returned missing or invalid package fields: {detail}. Retry; no prompt was forwarded.")
+    return data
+
+
+def validate_h3_prompt(text: str, task_mode: str, duration: float) -> list[str]:
+    """Check structural rules locally; creative quality still requires review."""
+    issues = []
+    fields = (
+        ["subject_definitions", "summary", "retention_analysis", "detailed_description",
+         "overall_soundscape", "non_diegetic_music"]
+        if task_mode == "full-reference" else
+        ["integrated_multimodal_description", "overall_soundscape", "non_diegetic_music"]
+    )
+    headings = list(re.finditer(r"(?m)^\s*(" + "|".join(fields) + r")\s*:", text))
+    if [match.group(1) for match in headings] != fields:
+        issues.append("Required sections must appear exactly once in the expected order: " + ", ".join(fields))
+    for index, heading in enumerate(headings):
+        end = headings[index + 1].start() if index + 1 < len(headings) else len(text)
+        if not text[heading.end():end].strip():
+            issues.append(f"Section {heading.group(1)} is empty.")
+    timeline_field = "detailed_description" if task_mode == "full-reference" else fields[0]
+    timeline = ""
+    for index, heading in enumerate(headings):
+        if heading.group(1) == timeline_field:
+            end = headings[index + 1].start() if index + 1 < len(headings) else len(text)
+            timeline = text[heading.end():end]
+            break
+    shots = list(re.finditer(r"\[Shot\s+(\d+)\]", timeline))
+    if not shots:
+        issues.append("Timeline must contain [Shot 1].")
+    elif [int(shot.group(1)) for shot in shots] != list(range(1, len(shots) + 1)):
+        issues.append("Shot numbers must start at 1 and increase consecutively.")
+    previous = 0.0
+    for index, shot in enumerate(shots):
+        end = shots[index + 1].start() if index + 1 < len(shots) else len(timeline)
+        segment = timeline[shot.end():end].lstrip()
+        timestamp = re.match(r"At (\d{2,}):([0-5]\d)\.(\d{3}),", segment)
+        if index == 0:
+            if re.match(r"At\s+\d", segment):
+                issues.append("Shot 1 must not have a cut timestamp.")
+            continue
+        if not timestamp:
+            issues.append(f"Shot {shot.group(1)} needs an At MM:SS.mmm, cut timestamp.")
+            continue
+        seconds = int(timestamp[1]) * 60 + int(timestamp[2]) + int(timestamp[3]) / 1000
+        if seconds <= previous or seconds >= duration:
+            issues.append(f"Shot {shot.group(1)} cut must increase and fall before the video ends.")
+        previous = seconds
+    if task_mode in ("I2VA", "FL2VA", "L2VA") and shots:
+        expected = alignment_instruction(task_mode, duration, int(shots[-1].group(1)))
+        if not text.strip().startswith(expected):
+            issues.append("Missing or mismatched keyframe-alignment instruction.")
+    tags = re.findall(r"</?d>", text)
+    depth = 0
+    for tag in tags:
+        depth += 1 if tag == "<d>" else -1
+        if depth not in (0, 1):
+            break
+    if depth != 0 or tags != [tag for _ in range(len(tags) // 2) for tag in ("<d>", "</d>")]:
+        issues.append("Dialogue tags must be paired and must not be nested.")
+    if any(not re.match(r"\s*\[[^\]\n]+\]", match.group(1))
+           for match in re.finditer(r"<d>(.*?)</d>", text, re.S)):
+        issues.append("Each dialogue tag needs a [Language] label.")
+    return issues

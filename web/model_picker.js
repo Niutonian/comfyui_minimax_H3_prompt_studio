@@ -33,7 +33,12 @@ app.registerExtension({
             this.widgets.splice(this.widgets.indexOf(modelWidget), 1);
             this.widgets.splice(modelIndex, 0, modelWidget);
 
+            let discoverySequence = 0;
+            let pendingRequest;
             const refreshModels = async (selectFirst = false) => {
+                const sequence = ++discoverySequence;
+                pendingRequest?.abort();
+                pendingRequest = new AbortController();
                 const previousModel = modelWidget.value;
                 this.setDirtyCanvas?.(true, true);
                 try {
@@ -43,9 +48,10 @@ app.registerExtension({
                     });
                     const response = await api.fetchApi(
                         `/minimax_h3_prompt_studio/models?${query.toString()}`,
-                        { cache: "no-store" },
+                        { cache: "no-store", signal: pendingRequest.signal },
                     );
                     const data = await response.json();
+                    if (sequence !== discoverySequence) return;
                     if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
                     const models = data.models || [];
                     const choices = [...models];
@@ -59,6 +65,7 @@ app.registerExtension({
                     modelWidget.value = selected || "No models found";
                     modelWidget.callback?.(modelWidget.value);
                 } catch (error) {
+                    if (sequence !== discoverySequence || error.name === "AbortError") return;
                     const message = `⚠ Discovery failed: ${error.message || error}`;
                     modelWidget.options.values = previousModel
                         ? [previousModel, message]
@@ -70,11 +77,28 @@ app.registerExtension({
             };
 
             this.addWidget("button", "refresh model list", null, () => refreshModels(false));
+            this.addWidget("button", "enter model manually", null, () => {
+                const value = window.prompt("Model identifier", modelWidget.value || "");
+                if (!value?.trim()) return;
+                ++discoverySequence;
+                pendingRequest?.abort();
+                const model = value.trim();
+                modelWidget.options.values = [model, ...modelWidget.options.values.filter((item) => item !== model)];
+                modelWidget.value = model;
+                modelWidget.callback?.(model);
+                this.setDirtyCanvas?.(true, true);
+            });
 
             const originalProviderCallback = providerWidget.callback;
             providerWidget.callback = (value) => {
                 originalProviderCallback?.call(providerWidget, value);
                 refreshModels(true);
+            };
+
+            const originalBaseUrlCallback = baseUrlWidget.callback;
+            baseUrlWidget.callback = (value) => {
+                originalBaseUrlCallback?.call(baseUrlWidget, value);
+                refreshModels(false);
             };
 
             setTimeout(() => refreshModels(false), 0);

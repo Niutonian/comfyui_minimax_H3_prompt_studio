@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from .providers import ProviderError, discover_models
 
 
@@ -30,7 +32,7 @@ def register_routes() -> None:
         provider = request.query.get("provider", "Ollama")
         base_url = request.query.get("base_url", "")
         try:
-            models = discover_models(provider, base_url)
+            models = await asyncio.to_thread(discover_models, provider, base_url)
             return web.json_response({"models": models, "error": ""})
         except ProviderError as exc:
             return web.json_response(
